@@ -53,6 +53,22 @@ class TrainingServiceTest {
     }
 
     @Test
+    void trialUsersOnlyReceiveWeek1Content() {
+        Long id = newUser(SubscriptionStatus.TRIAL);
+        service.saveProfile(id, answers);
+
+        assertEquals(1, service.getCurrentProgram(id).program().weeks().size());
+    }
+
+    @Test
+    void membersReceiveAllFourWeeks() {
+        Long id = newUser(SubscriptionStatus.ACTIVE);
+        service.saveProfile(id, answers);
+
+        assertEquals(4, service.getCurrentProgram(id).program().weeks().size());
+    }
+
+    @Test
     void markingTheSameWorkoutTwiceCountsOnce() {
         Long id = newUser(SubscriptionStatus.ACTIVE);
         service.saveProfile(id, answers);

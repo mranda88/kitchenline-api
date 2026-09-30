@@ -14,6 +14,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Comparator;
 import java.util.List;
 
+import java.util.Optional;
+
 /**
  * The app's actions: save a profile, show the program, log workouts, start the next month.
  * Business rules live here, so every screen (web now, phone app later) follows the same rules.
@@ -65,13 +67,25 @@ public class TrainingService {
         return profile;
     }
 
+    /** The player's saved answers, if they've filled in the profile. */
+    @Transactional(readOnly = true)
+    public Optional<PlayerProfile> getProfile(Long userId) {
+        return profiles.findByUserId(userId).map(Profile::toPlayerProfile);
+    }
+
     /** The current month's program plus progress, ready for the app screen. */
     @Transactional(readOnly = true)
     public ProgramView getCurrentProgram(Long userId) {
         AppUser user = findUser(userId);
         ProgramMonth month = currentMonth(userId);
 
-        MonthlyProgram program = generator.generate(month.getProfileSnapshot(), month.getMonthNumber());
+        int unlocked = unlockedWeeks(user);
+
+        // Build the full month, then send only the weeks this player has access to.
+        // Trial users never receive weeks 2-4, so paid content can't be read from the API.
+        MonthlyProgram full = generator.generate(month.getProfileSnapshot(), month.getMonthNumber());
+        MonthlyProgram program = new MonthlyProgram(full.month(), full.profile(), full.intensity(),
+                List.copyOf(full.weeks().subList(0, unlocked)), full.notes());
 
         List<String> completed = logs.findByProgramMonthId(month.getId()).stream()
                 .sorted(Comparator.comparingInt(WorkoutLog::getWeekNumber)
@@ -81,7 +95,7 @@ public class TrainingService {
 
         int total = totalWorkouts(month);
         int done = completed.size();
-        return new ProgramView(program, unlockedWeeks(user), completed, done, total,
+        return new ProgramView(program, unlocked, completed, done, total,
                 done * 100 / total, canStartNextMonth(user, done, total));
     }
 
