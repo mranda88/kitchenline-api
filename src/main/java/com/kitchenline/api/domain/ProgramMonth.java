@@ -46,6 +46,11 @@ public class ProgramMonth {
         startedAt = Instant.now();
     }
 
+    /** Only used before any workout is logged, e.g. fixing a typo in the profile. */
+    public void replaceSnapshot(PlayerProfile profile) {
+        this.profileSnapshot = ProfileData.from(profile);
+    }
+
     public Long getId() { return id; }
     public AppUser getUser() { return user; }
     public int getMonthNumber() { return monthNumber; }
