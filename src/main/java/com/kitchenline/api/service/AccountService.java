@@ -32,6 +32,13 @@ public class AccountService {
         return users.save(new AppUser(cleanEmail, passwordEncoder.encode(password)));
     }
 
+    /** Loads the current account, e.g. to show its subscription status. */
+    @Transactional(readOnly = true)
+    public AppUser getAccount(Long userId) {
+        return users.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("No user with id " + userId));
+    }
+
     /** Trims spaces, lowercases, and checks the email looks real (name@domain.tld). */
     static String normalizeEmail(String email) {
         if (email == null) {
