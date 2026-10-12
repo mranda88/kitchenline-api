@@ -48,13 +48,13 @@ check "Invalid profile is rejected"     400 "$(call PUT /api/profile "$BAD_PROFI
 check "Save profile"                    200 "$(call PUT /api/profile "$PROFILE")"
 check "Load profile"                    200 "$(call GET /api/profile)"
 check "Get current program"             200 "$(call GET /api/program/current)"
-check "Trial receives only week 1"      1   "$(grep -o '"instructions"' "$BODY" | wc -l | tr -d ' ')"
+check "Everyone receives all 4 weeks"   4   "$(grep -o '"instructions"' "$BODY" | wc -l | tr -d ' ')"
 check "Complete week 1, day A"          200 "$(call POST /api/program/workouts/1/A)"
 check "Progress shows 1 done"           1   "$(grep -o '"completedCount":1' "$BODY" | wc -l | tr -d ' ')"
-check "Week 2 is locked on the trial"   409 "$(call POST /api/program/workouts/2/A)"
+check "Week 2 is open to everyone"      200 "$(call POST /api/program/workouts/2/A)"
 check "Day D doesn't exist"             400 "$(call POST /api/program/workouts/1/D)"
 check "Un-check week 1, day A"          200 "$(call DELETE /api/program/workouts/1/A)"
-check "Next month needs a membership"   409 "$(call POST /api/program/next-month)"
+check "Next month needs 75% first"      409 "$(call POST /api/program/next-month)"
 
 # A change WITHOUT the CSRF header must be refused
 NO_CSRF=$(curl -s -o "$BODY" -w "%{http_code}" -b "$JAR" -X POST "$BASE/api/program/workouts/1/B")

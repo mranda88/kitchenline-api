@@ -8,12 +8,12 @@ import com.kitchenline.api.repository.AppUserRepository;
 import com.kitchenline.api.repository.ProfileRepository;
 import com.kitchenline.api.repository.ProgramMonthRepository;
 import com.kitchenline.api.repository.WorkoutLogRepository;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Comparator;
 import java.util.List;
-
 import java.util.Optional;
 
 /**
@@ -33,14 +33,19 @@ public class TrainingService {
     private final WorkoutLogRepository logs;
     private final ProgramGenerator generator;
 
+    /** false = everything is free (current setting). true = trial users only get week 1. */
+    private final boolean paywallEnabled;
+
     public TrainingService(AppUserRepository users, ProfileRepository profiles,
                            ProgramMonthRepository months, WorkoutLogRepository logs,
-                           ProgramGenerator generator) {
+                           ProgramGenerator generator,
+                           @Value("${app.paywall-enabled:false}") boolean paywallEnabled) {
         this.users = users;
         this.profiles = profiles;
         this.months = months;
         this.logs = logs;
         this.generator = generator;
+        this.paywallEnabled = paywallEnabled;
     }
 
     /**
@@ -82,7 +87,6 @@ public class TrainingService {
         int unlocked = unlockedWeeks(user);
 
         // Build the full month, then send only the weeks this player has access to.
-        // Trial users never receive weeks 2-4, so paid content can't be read from the API.
         MonthlyProgram full = generator.generate(month.getProfileSnapshot(), month.getMonthNumber());
         MonthlyProgram program = new MonthlyProgram(full.month(), full.profile(), full.intensity(),
                 List.copyOf(full.weeks().subList(0, unlocked)), full.notes());
@@ -122,12 +126,12 @@ public class TrainingService {
         logs.deleteByProgramMonthIdAndWeekNumberAndDayLabel(month.getId(), week, validateDay(month, dayLabel));
     }
 
-    /** Members who finished 75% of this month move on, using their latest profile answers. */
+    /** Players who finished 75% of this month move on, using their latest profile answers. */
     public ProgramMonth startNextMonth(Long userId) {
         AppUser user = findUser(userId);
         ProgramMonth current = currentMonth(userId);
 
-        if (user.getSubscriptionStatus() != SubscriptionStatus.ACTIVE) {
+        if (!hasFullAccess(user)) {
             throw new IllegalStateException("A membership is required to start a new month.");
         }
         int done = (int) logs.countByProgramMonthId(current.getId());
@@ -143,13 +147,17 @@ public class TrainingService {
 
     // ---------- Rules and helpers ----------
 
+    /** Free mode: everyone has full access. Paywall mode: only paying members do. */
+    private boolean hasFullAccess(AppUser user) {
+        return !paywallEnabled || user.getSubscriptionStatus() == SubscriptionStatus.ACTIVE;
+    }
+
     int unlockedWeeks(AppUser user) {
-        return user.getSubscriptionStatus() == SubscriptionStatus.ACTIVE ? 4 : 1;
+        return hasFullAccess(user) ? 4 : 1;
     }
 
     private boolean canStartNextMonth(AppUser user, int done, int total) {
-        return user.getSubscriptionStatus() == SubscriptionStatus.ACTIVE
-                && done >= Math.ceil(total * UNLOCK_THRESHOLD);
+        return hasFullAccess(user) && done >= Math.ceil(total * UNLOCK_THRESHOLD);
     }
 
     private int totalWorkouts(ProgramMonth month) {
